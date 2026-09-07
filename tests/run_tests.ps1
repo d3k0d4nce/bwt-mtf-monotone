@@ -1,4 +1,6 @@
-$files = @("bib", "book1", "book2", "geo", "news", "obj1", "obj2", "paper1", "paper2", "pic", "progc", "progl", "progp", "trans")
+$files = @("bib", "book1", "book2", "geo", "news", "obj1", "obj2",
+           "paper1", "paper2", "paper3", "paper4", "paper5", "paper6",
+           "pic", "progc", "progl", "progp", "trans")
 
 New-Item -ItemType Directory -Force -Path "compressed" | Out-Null
 New-Item -ItemType Directory -Force -Path "decoded" | Out-Null

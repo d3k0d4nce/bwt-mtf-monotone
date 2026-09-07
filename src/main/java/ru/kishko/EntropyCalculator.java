@@ -10,7 +10,8 @@ public class EntropyCalculator {
     public static void main(String[] args) {
         String[] files = {
                 "bib", "book1", "book2", "geo", "news", "obj1", "obj2",
-                "paper1", "paper2", "pic", "progc", "progl", "progp", "trans"
+                "paper1", "paper2", "paper3", "paper4", "paper5", "paper6",
+                "pic", "progc", "progl", "progp", "trans"
         };
 
         String testPath = "tests/";
