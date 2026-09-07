@@ -3,8 +3,10 @@ package ru.kishko;
 public class FrequencyTable {
 
     public static final int SYMBOL_COUNT = 257;
+    public static final int EOF_SYMBOL = 256;
+    public static final int MAX_TOTAL = 16384;
 
-    private int[] frequencies;
+    private final int[] frequencies;
 
     private int total;
 
@@ -32,7 +34,7 @@ public class FrequencyTable {
     public void update(int symbol) {
         frequencies[symbol]++;
         total++;
-        if (total > 16384) {
+        if (total > MAX_TOTAL) {
             scale();
         }
     }

@@ -4,86 +4,73 @@ import java.io.IOException;
 
 public class ArithmeticEncoder {
 
-    private static final int TOP_VALUE = 0xFFFF;
+    private static final long MAX_RANGE = 0xFFFFL;
+    private static final long HALF = 0x8000L;
+    private static final long QUARTER = 0x4000L;
+    private static final long THREE_QUARTER = 0xC000L;
 
-    private static final int FIRST_QTR = (TOP_VALUE / 4) + 1;
-
-    private static final int HALF = 2 * FIRST_QTR;
-
-    private BitOutputStream bitOut;
-
+    private final BitOutputStream out;
     private long low;
-
-    private long range;
-
-    private int bitsToFollow;
+    private long high;
+    private long bitsToFollow;
 
     public ArithmeticEncoder(BitOutputStream out) {
-        this.bitOut = out;
+        this.out = out;
         this.low = 0;
-        this.range = TOP_VALUE;
+        this.high = MAX_RANGE;
         this.bitsToFollow = 0;
     }
 
     public void encode(int symbol, FrequencyTable freq) throws IOException {
-        long total = freq.getTotal();
-        long cum = freq.getCumulative(symbol);
-        long freqSym = freq.getCumulative(symbol + 1) - cum;
+        int total = freq.getTotal();
+        int cumLow = freq.getCumulative(symbol);
+        int cumHigh = freq.getCumulative(symbol + 1);
 
-        long newRange = range / total;
-        low += cum * newRange;
-        range = freqSym * newRange;
-        if (range == 0) {
-            throw new RuntimeException("Range became zero");
-        }
-        while (range <= FIRST_QTR) {
-            if (low < HALF) {
-                writeBit(0);
-                while (bitsToFollow > 0) {
-                    writeBit(1);
-                    bitsToFollow--;
-                }
+        long range = high - low + 1;
+        high = low + (range * cumHigh) / total - 1;
+        low = low + (range * cumLow) / total;
+
+        while (true) {
+            if (high < HALF) {
+                writeBitWithFollow(0);
             } else if (low >= HALF) {
-                writeBit(1);
-                while (bitsToFollow > 0) {
-                    writeBit(0);
-                    bitsToFollow--;
-                }
+                writeBitWithFollow(1);
                 low -= HALF;
-            } else {
+                high -= HALF;
+            } else if (low >= QUARTER && high < THREE_QUARTER) {
                 bitsToFollow++;
-                low -= FIRST_QTR;
+                low -= QUARTER;
+                high -= QUARTER;
+            } else {
+                break;
             }
-            low <<= 1;
-            range <<= 1;
-            low &= TOP_VALUE;
+
+            low = (low << 1) & MAX_RANGE;
+            high = ((high << 1) & MAX_RANGE) | 1;
         }
+
         freq.update(symbol);
     }
 
     public void finish() throws IOException {
         bitsToFollow++;
-        if (low < HALF) {
-            writeBit(0);
-            while (bitsToFollow > 0) {
-                writeBit(1);
-                bitsToFollow--;
-            }
+        if (low < QUARTER) {
+            writeBitWithFollow(0);
         } else {
-            writeBit(1);
-            while (bitsToFollow > 0) {
-                writeBit(0);
-                bitsToFollow--;
-            }
+            writeBitWithFollow(1);
         }
-        bitOut.flush();
+        out.flush();
     }
 
-    private void writeBit(int bit) throws IOException {
-        bitOut.writeBit(bit);
+    private void writeBitWithFollow(int bit) throws IOException {
+        out.writeBit(bit);
+        while (bitsToFollow > 0) {
+            out.writeBit(1 - bit);
+            bitsToFollow--;
+        }
     }
 
     public void close() throws IOException {
-        bitOut.close();
+        out.close();
     }
 }
