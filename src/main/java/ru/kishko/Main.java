@@ -4,18 +4,15 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class Main {
 
-    private static final int MAGIC = 0x41434431;
-
-    private static final int EOF = FrequencyTable.EOF_SYMBOL;
+    public static final int MAGIC = 0x41434431;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -40,59 +37,75 @@ public class Main {
         }
     }
 
-    private static void encode(String input, String output) throws IOException {
-        long fileSize = new File(input).length();
+    private static void encode(String input, String output) throws Exception {
+        byte[] original = Files.readAllBytes(Paths.get(input));
 
-        try (InputStream in = new BufferedInputStream(new FileInputStream(input));
-             DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(output)))) {
+        BWT.Result bwt = BWT.encode(original);
+        byte[] bwtData = bwt.data;
+        int bwtIndex = bwt.index;
 
-            out.writeInt(MAGIC);
-            out.writeLong(fileSize);
+        try (FileOutputStream fos = new FileOutputStream(output);
+             BufferedOutputStream buffered = new BufferedOutputStream(fos);
+             DataOutputStream dos = new DataOutputStream(buffered);
+             BitOutputStream bos = new BitOutputStream(dos)) {
 
-            try (BitOutputStream bitOut = new BitOutputStream(out)) {
-                ArithmeticEncoder encoder = new ArithmeticEncoder(bitOut);
-                FrequencyTable freq = new FrequencyTable();
+            dos.writeInt(MAGIC);
+            dos.writeInt(original.length);
+            dos.writeInt(bwtIndex);
 
-                int b;
-                while ((b = in.read()) != -1) {
-                    encoder.encode(b, freq);
-                }
-                encoder.encode(EOF, freq);
-                encoder.finish();
+            MTF mtf = new MTF();
+            FrequencyTable freq = new FrequencyTable();
+            ArithmeticEncoder encoder = new ArithmeticEncoder(bos);
+
+            for (byte b : bwtData) {
+                int mtfIndex = mtf.encode(b & 0xFF);
+                encoder.encode(mtfIndex, freq);
             }
+            encoder.encode(FrequencyTable.EOF_SYMBOL, freq);
+            encoder.finish();
         }
     }
 
-    private static void decode(String input, String output) throws IOException {
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(input)))) {
+    private static void decode(String input, String output) throws Exception {
+        try (FileInputStream fis = new FileInputStream(input);
+             BufferedInputStream buffered = new BufferedInputStream(fis);
+             DataInputStream dis = new DataInputStream(buffered);
+             BitInputStream bis = new BitInputStream(dis)) {
 
-            int magic = in.readInt();
-            if (magic != MAGIC) {
-                throw new IOException("Invalid file format");
+            int magic = dis.readInt();
+            if (magic != MAGIC) throw new IOException("Invalid file format");
+
+            int originalSize = dis.readInt();
+            int bwtIndex = dis.readInt();
+
+            if (originalSize == 0) {
+                Files.write(Paths.get(output), new byte[0]);
+                return;
             }
 
-            long fileSize = in.readLong();
+            FrequencyTable freq = new FrequencyTable();
+            ArithmeticDecoder decoder = new ArithmeticDecoder(bis);
+            MTF mtf = new MTF();
 
-            try (BitInputStream bitIn = new BitInputStream(in);
-                 OutputStream out = new BufferedOutputStream(new FileOutputStream(output))) {
+            byte[] bwtData = new byte[originalSize];
+            int pos = 0;
 
-                ArithmeticDecoder decoder = new ArithmeticDecoder(bitIn);
-                FrequencyTable freq = new FrequencyTable();
+            while (true) {
+                int symbol = decoder.decode(freq);
+                if (symbol == FrequencyTable.EOF_SYMBOL) break;
+                if (symbol < 0 || symbol >= 256)
+                    throw new IOException("Invalid MTF symbol: " + symbol);
 
-                long written = 0;
-                while (true) {
-                    int symbol = decoder.decode(freq);
-                    if (symbol == EOF) {
-                        break;
-                    }
-                    out.write(symbol);
-                    written++;
-                }
-
-                if (written != fileSize) {
-                    throw new IOException("Size mismatch: expected " + fileSize + ", got " + written);
-                }
+                int decodedByte = mtf.decode(symbol);
+                bwtData[pos++] = (byte) decodedByte;
+                if (pos > originalSize) throw new IOException("Decoded data too large");
             }
+
+            if (pos != originalSize)
+                throw new IOException("Size mismatch: expected " + originalSize + ", got " + pos);
+
+            byte[] decoded = BWT.decode(bwtData, bwtIndex);
+            Files.write(Paths.get(output), decoded);
         }
     }
 }
