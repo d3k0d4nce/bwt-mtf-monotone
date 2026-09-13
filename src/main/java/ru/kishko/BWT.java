@@ -8,9 +8,11 @@ public class BWT {
         int n = input.length;
         if (n == 0) return new Result(new byte[0], 0);
 
+        // счетчик сдвигов
         Integer[] rotations = new Integer[n];
         for (int i = 0; i < n; i++) rotations[i] = i;
 
+        // лексикографическая сортировка сдвигов.
         Arrays.sort(rotations, (a, b) -> {
             for (int i = 0; i < n; i++) {
                 int ia = (a + i) % n;
@@ -27,9 +29,9 @@ public class BWT {
 
         for (int row = 0; row < n; row++) {
             int start = rotations[row];
-            int last = (start + n - 1) % n;
+            int last = (start + n - 1) % n;  // последний символ циклического сдвига
             transformed[row] = input[last];
-            if (start == 0) index = row;
+            if (start == 0) index = row;    // номер исходной строки в таблице
         }
 
         return new Result(transformed, index);
@@ -40,16 +42,19 @@ public class BWT {
         if (n == 0) return new byte[0];
         if (index < 0 || index >= n) throw new IllegalArgumentException("Invalid BWT index");
 
+        // сколько раз встречался каждый символ
         int[] freq = new int[256];
-        for (byte b : transformed) freq[b & 0xFF]++;
+        for (byte b : transformed) freq[b & 0xFF]++; // a:4, b:2, c:1
 
+        // смотрим с какой позиции начнется символ
         int[] firstPos = new int[256];
         int sum = 0;
         for (int i = 0; i < 256; i++) {
             firstPos[i] = sum;
             sum += freq[i];
-        }
+        } // a:0, b:4, c:6
 
+        // определяем индексы из последнего столбца на первый
         int[] next = new int[n];
         int[] used = new int[256];
         for (int i = 0; i < n; i++) {
@@ -58,6 +63,7 @@ public class BWT {
             used[sym]++;
         }
 
+        // восстановление строки, идем по next, начиная с index, заполняем с конца
         byte[] result = new byte[n];
         int cur = index;
         for (int i = n - 1; i >= 0; i--) {

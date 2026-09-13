@@ -6,10 +6,6 @@ public class MTF {
     private final int[] stack = new int[ALPHABET_SIZE];
 
     public MTF() {
-        reset();
-    }
-
-    public void reset() {
         for (int i = 0; i < ALPHABET_SIZE; i++) stack[i] = i;
     }
 

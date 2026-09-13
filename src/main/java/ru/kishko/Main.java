@@ -12,7 +12,7 @@ import java.nio.file.Paths;
 
 public class Main {
 
-    public static final int MAGIC = 0x41434431;
+    public static final int MAGIC = 0x42574D43;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -40,6 +40,7 @@ public class Main {
     private static void encode(String input, String output) throws Exception {
         byte[] original = Files.readAllBytes(Paths.get(input));
 
+        // BWT
         BWT.Result bwt = BWT.encode(original);
         byte[] bwtData = bwt.data;
         int bwtIndex = bwt.index;
@@ -53,16 +54,13 @@ public class Main {
             dos.writeInt(original.length);
             dos.writeInt(bwtIndex);
 
+            // MTF + Монотонный код
             MTF mtf = new MTF();
-            FrequencyTable freq = new FrequencyTable();
-            ArithmeticEncoder encoder = new ArithmeticEncoder(bos);
-
             for (byte b : bwtData) {
                 int mtfIndex = mtf.encode(b & 0xFF);
-                encoder.encode(mtfIndex, freq);
+                MonotoneCoder.encode(mtfIndex, bos);
             }
-            encoder.encode(FrequencyTable.EOF_SYMBOL, freq);
-            encoder.finish();
+            bos.flush();
         }
     }
 
@@ -72,40 +70,24 @@ public class Main {
              DataInputStream dis = new DataInputStream(buffered);
              BitInputStream bis = new BitInputStream(dis)) {
 
-            int magic = dis.readInt();
-            if (magic != MAGIC) throw new IOException("Invalid file format");
-
-            int originalSize = dis.readInt();
+            if (dis.readInt() != MAGIC) throw new IOException("Invalid format");
+            int size = dis.readInt();
             int bwtIndex = dis.readInt();
 
-            if (originalSize == 0) {
+            if (size == 0) {
                 Files.write(Paths.get(output), new byte[0]);
                 return;
             }
 
-            FrequencyTable freq = new FrequencyTable();
-            ArithmeticDecoder decoder = new ArithmeticDecoder(bis);
             MTF mtf = new MTF();
+            byte[] bwtData = new byte[size];
 
-            byte[] bwtData = new byte[originalSize];
-            int pos = 0;
-
-            while (true) {
-                int symbol = decoder.decode(freq);
-                if (symbol == FrequencyTable.EOF_SYMBOL) break;
-                if (symbol < 0 || symbol >= 256)
-                    throw new IOException("Invalid MTF symbol: " + symbol);
-
-                int decodedByte = mtf.decode(symbol);
-                bwtData[pos++] = (byte) decodedByte;
-                if (pos > originalSize) throw new IOException("Decoded data too large");
+            for (int i = 0; i < size; i++) {
+                int mtfIndex = MonotoneCoder.decode(bis);
+                bwtData[i] = (byte) mtf.decode(mtfIndex);
             }
 
-            if (pos != originalSize)
-                throw new IOException("Size mismatch: expected " + originalSize + ", got " + pos);
-
-            byte[] decoded = BWT.decode(bwtData, bwtIndex);
-            Files.write(Paths.get(output), decoded);
+            Files.write(Paths.get(output), BWT.decode(bwtData, bwtIndex));
         }
     }
 }
