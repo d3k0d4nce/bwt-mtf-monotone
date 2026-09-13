@@ -6,7 +6,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
@@ -70,7 +69,6 @@ public class Main {
              DataInputStream dis = new DataInputStream(buffered);
              BitInputStream bis = new BitInputStream(dis)) {
 
-            if (dis.readInt() != MAGIC) throw new IOException("Invalid format");
             int size = dis.readInt();
             int bwtIndex = dis.readInt();
 

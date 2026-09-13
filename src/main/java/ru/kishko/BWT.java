@@ -40,7 +40,6 @@ public class BWT {
     public static byte[] decode(byte[] transformed, int index) {
         int n = transformed.length;
         if (n == 0) return new byte[0];
-        if (index < 0 || index >= n) throw new IllegalArgumentException("Invalid BWT index");
 
         // сколько раз встречался каждый символ
         int[] freq = new int[256];
